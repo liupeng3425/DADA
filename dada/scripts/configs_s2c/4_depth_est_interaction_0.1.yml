@@ -1,0 +1,14 @@
+SOURCE: SYNTHIA
+TARGET: Cityscapes
+EXP_NAME: SYNTHIA2Cityscapes_DeepLabv2_depth_est_0.1
+NUM_WORKERS: 4
+USE_DEPTH: True
+TARGET_DEPTH: True
+GPU_ID: 6
+TRAIN:
+  LAMBDA_SEG_FUSE_MAIN: 0.1
+  DA_METHOD: train_depth_est
+  MODEL: get_deeplab_v2_depth_est
+  RESTORE_FROM: ../../pretrained_models/DeepLab_resnet_pretrained_imagenet.pth
+TEST:
+  MODE: best

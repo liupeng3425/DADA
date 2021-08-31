@@ -23,6 +23,14 @@ from advent.model.discriminator import get_fc_discriminator
 from advent.utils.func import adjust_learning_rate, adjust_learning_rate_discriminator
 from advent.utils.func import loss_calc, bce_loss, prob_2_entropy
 
+from dada.domain_adaptation.train_UDA_add_target_depth import train_target_depth
+from dada.domain_adaptation.train_UDA_add_target_depth_seg import train_target_depth_seg
+from dada.domain_adaptation.train_UDA_baseline import train_baseline
+from dada.domain_adaptation.train_UDA_dada_ours import train_dada_ours
+from dada.domain_adaptation.train_UDA_depth_est import train_depth_est
+from dada.domain_adaptation.train_UDA_gt_target_depth import train_dada_gt_target_depth
+from dada.domain_adaptation.train_UDA_source_depth import train_source_depth
+from dada.domain_adaptation.train_source_only import train_source_only
 from dada.utils.func import loss_calc_depth
 from dada.utils.viz_segmask import colorize_mask
 
@@ -82,7 +90,7 @@ def train_dada(model, trainloader, targetloader, cfg):
     target_label = 1
     trainloader_iter = enumerate(trainloader)
     targetloader_iter = enumerate(targetloader)
-    for i_iter in tqdm(range(cfg.TRAIN.EARLY_STOP+1)):
+    for i_iter in tqdm(range(cfg.TRAIN.EARLY_STOP + 1)):
         # reset optimizers
         optimizer.zero_grad()
         optimizer_d_main.zero_grad()
@@ -96,30 +104,54 @@ def train_dada(model, trainloader, targetloader, cfg):
         # train on source
         _, batch = trainloader_iter.__next__()
         images_source, labels, depth, _, _ = batch
-        _, pred_src_main, pred_depth_src_main = model(images_source.cuda(device))
+        if cfg.TARGET_DEPTH:
+            _, pred_src_main, pred_depth_src_main, seg_fu_src = model(images_source.cuda(device))
+            seg_fu_src = interp(seg_fu_src)
+        else:
+            _, pred_src_main, pred_depth_src_main = model(images_source.cuda(device))
         pred_src_main = interp(pred_src_main)
         pred_depth_src_main = interp(pred_depth_src_main)
         loss_depth_src_main = loss_calc_depth(pred_depth_src_main, depth, device)
         loss_seg_src_main = loss_calc(pred_src_main, labels, device)
-        loss = ( cfg.TRAIN.LAMBDA_SEG_MAIN * loss_seg_src_main
+        loss = (cfg.TRAIN.LAMBDA_SEG_MAIN * loss_seg_src_main
                 + cfg.TRAIN.LAMBDA_DEPTH_MAIN * loss_depth_src_main)
+        if cfg.TARGET_DEPTH:
+            loss_seg_fu_src_main = loss_calc(seg_fu_src, labels, device)
+            loss += cfg.TRAIN.LAMBDA_SEG_FUSE_MAIN * loss_seg_fu_src_main
         loss.backward()
 
-        # adversarial training ot fool the discriminator
+        # adversarial training to fool the discriminator
         _, batch = targetloader_iter.__next__()
-        images, _, _, _ = batch
-        _, pred_trg_main, pred_depth_trg_main = model(images.cuda(device))
-        pred_trg_main = interp_target(pred_trg_main)
+        if cfg.TARGET_DEPTH:
+            images, _, _, _, depth_target = batch
+            _, pred_trg_main, pred_depth_trg_main, seg_fu_trg = model(images.cuda(device))
+            seg_fu_trg = interp_target(seg_fu_trg)
+            pred_trg_main = seg_fu_trg
+        else:
+            images, _, _, _ = batch
+            _, pred_trg_main, pred_depth_trg_main = model(images.cuda(device))
+            pred_trg_main = interp_target(pred_trg_main)
+
         pred_depth_trg_main = interp_target(pred_depth_trg_main)
+
         d_out_main = d_main(prob_2_entropy(F.softmax(pred_trg_main)) * pred_depth_trg_main)
         loss_adv_trg_main = bce_loss(d_out_main, source_label)
         loss = cfg.TRAIN.LAMBDA_ADV_MAIN * loss_adv_trg_main
+        if cfg.TARGET_DEPTH:
+            loss_depth_trg_main = loss_calc_depth(pred_depth_trg_main, depth_target, device)
+            loss += cfg.TRAIN.LAMBDA_TARGET_DEPTH_MAIN * loss_depth_trg_main
+
         loss.backward()
 
         # Train discriminator networks
         # enable training mode on discriminator networks
         for param in d_main.parameters():
             param.requires_grad = True
+
+        if cfg.TARGET_DEPTH:
+            pred_src_main = seg_fu_src
+            pred_trg_main = seg_fu_trg
+
         # train with source
         pred_src_main = pred_src_main.detach()
         pred_depth_src_main = pred_depth_src_main.detach()
@@ -141,7 +173,9 @@ def train_dada(model, trainloader, targetloader, cfg):
 
         current_losses = {
             "loss_seg_src_main": loss_seg_src_main,
+            "loss_seg_fu_src_main": 'na' if not cfg.TARGET_DEPTH else loss_seg_fu_src_main,
             "loss_depth_src_main": loss_depth_src_main,
+            "loss_depth_trg_main": 'na' if not cfg.TARGET_DEPTH else loss_depth_trg_main,
             "loss_adv_trg_main": loss_adv_trg_main,
             "loss_d_main": loss_d_main,
         }
@@ -180,6 +214,28 @@ def draw_in_tensorboard(writer, images, i_iter, pred_main, num_classes, type_):
                            range=(0, 255))
     writer.add_image(f"Prediction - {type_}", grid_image, i_iter)
 
+
 def train_domain_adaptation_with_depth(model, trainloader, targetloader, cfg):
-    assert cfg.TRAIN.DA_METHOD in {"DADA"}, "Not yet supported DA method {}".format(cfg.TRAIN.DA_METHOD)
-    train_dada(model, trainloader, targetloader, cfg)
+    # assert cfg.TRAIN.DA_METHOD in {"DADA", 'DADA_Depth'}, "Not yet supported DA method {}".format(cfg.TRAIN.DA_METHOD)
+    if cfg.TRAIN.DA_METHOD == 'DADA':
+        train_dada(model, trainloader, targetloader, cfg)
+    elif cfg.TRAIN.DA_METHOD == 'DADA_Depth':
+        train_dada(model, trainloader, targetloader, cfg)
+    elif cfg.TRAIN.DA_METHOD == 'source_only':
+        train_source_only(model, trainloader, targetloader, cfg)
+    elif cfg.TRAIN.DA_METHOD == 'baseline':
+        train_baseline(model, trainloader, targetloader, cfg)
+    elif cfg.TRAIN.DA_METHOD == 'train_target_depth':
+        train_target_depth(model, trainloader, targetloader, cfg)
+    elif cfg.TRAIN.DA_METHOD == 'train_target_depth_seg':
+        train_target_depth_seg(model, trainloader, targetloader, cfg)
+    elif cfg.TRAIN.DA_METHOD == 'train_dada_gt_target_depth':
+        train_dada_gt_target_depth(model, trainloader, targetloader, cfg)
+    elif cfg.TRAIN.DA_METHOD == 'train_source_depth':
+        train_source_depth(model, trainloader, targetloader, cfg)
+    elif cfg.TRAIN.DA_METHOD == 'train_dada_ours':
+        train_dada_ours(model, trainloader, targetloader, cfg)
+    elif cfg.TRAIN.DA_METHOD == 'train_depth_est':
+        train_depth_est(model, trainloader, targetloader, cfg)
+    else:
+        print(f"Not yet supported DA method {cfg.TRAIN.DA_METHOD}")

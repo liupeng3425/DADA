@@ -1,0 +1,28 @@
+SOURCE: SYNTHIA
+TARGET: Cityscapes
+EXP_NAME: SYNTHIA2Cityscapes_DeepLabv2_depth_est_0.01_test
+NUM_WORKERS: 4
+USE_DEPTH: True
+TARGET_DEPTH: False
+GPU_ID: 5
+TEST:
+  MODEL:
+    - get_deeplab_v2_depth_est
+  MODE: best
+  SNAPSHOT_DIR:
+    - ../../experiments/snapshots/SYNTHIA2Cityscapes_DeepLabv2_depth_est_0.01 # used in 'best' mode
+  SNAPSHOT_STEP: 2000  # used in 'best' mode
+  SNAPSHOT_MAXITER: 90000  # used in 'best' mode
+  WAIT_MODEL: True
+  EVAL_MODE: 'seg'
+#
+#  if cfg.TEST.EVAL_MODE=='depth_seg':
+#    _, _, _, pred_main = models[0](image.cuda(device))
+#  elif cfg.TEST.EVAL_MODE=='sum':
+#    _, pred_seg, _, pred_depth = models[0](image.cuda(device))
+#    pred_main = pred_seg/2+pred_depth/2
+#  else:
+#    _, pred_main, _, _ = models[0](image.cuda(device))
+
+#  RESTORE_FROM:
+#    - ../../pretrained_models/synthia2cityscapes_dada.pth

@@ -1,0 +1,18 @@
+SOURCE: SYNTHIA
+TARGET: Cityscapes
+EXP_NAME: SYNTHIA2Cityscapes_DeepLabv2_DADA_t_depth_no_fusion_test
+NUM_WORKERS: 4
+USE_DEPTH: True
+TARGET_DEPTH: True
+GPU_ID: 7
+TEST:
+  MODEL:
+    - DeepLabv2_depth_no_fusion
+  MODE: best
+  SNAPSHOT_DIR:
+    - ../../experiments/snapshots/SYNTHIA2Cityscapes_DeepLabv2_DADA_t_depth_no_fusion_new_depth_new_weight  # used in 'best' mode
+  SNAPSHOT_STEP: 2000  # used in 'best' mode
+  SNAPSHOT_MAXITER: 90000  # used in 'best' mode
+
+#  RESTORE_FROM:
+#    - ../../pretrained_models/synthia2cityscapes_dada.pth

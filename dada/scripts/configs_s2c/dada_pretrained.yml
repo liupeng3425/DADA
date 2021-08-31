@@ -3,6 +3,7 @@ TARGET: Cityscapes
 EXP_NAME: SYNTHIA2Cityscapes_DeepLabv2_DADA_pretrained
 NUM_WORKERS: 4
 USE_DEPTH: True
+GPU_ID: 1
 TEST:
   MODE: single
   RESTORE_FROM:

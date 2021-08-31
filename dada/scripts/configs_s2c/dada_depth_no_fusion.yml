@@ -1,0 +1,13 @@
+SOURCE: SYNTHIA
+TARGET: Cityscapes
+EXP_NAME: SYNTHIA2Cityscapes_DeepLabv2_DADA_t_depth_no_fusion_new_depth_new_weight
+NUM_WORKERS: 4
+USE_DEPTH: True
+TARGET_DEPTH: True
+GPU_ID: 7
+TRAIN:
+  DA_METHOD: DADA_Depth
+  MODEL: DeepLabv2_depth_no_fusion
+  RESTORE_FROM: ../../pretrained_models/DeepLab_resnet_pretrained_imagenet.pth
+TEST:
+  MODE: best

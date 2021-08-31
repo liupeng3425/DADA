@@ -34,6 +34,8 @@ cfg.DATA_DIRECTORY_TARGET = str(project_root / "data/Cityscapes")
 # Number of object classes
 cfg.NUM_CLASSES = 16
 cfg.USE_DEPTH = True
+cfg.TARGET_DEPTH = False
+cfg.TARGET_DEPTH_GT = False
 # Exp dirs
 cfg.EXP_NAME = ""
 cfg.EXP_ROOT = project_root / "experiments"
@@ -66,6 +68,9 @@ cfg.TRAIN.POWER = 0.9
 cfg.TRAIN.LAMBDA_SEG_MAIN = 1.0
 cfg.TRAIN.LAMBDA_SEG_AUX = 0.1  # weight of conv4 prediction. Used in multi-level setting.
 cfg.TRAIN.LAMBDA_DEPTH_MAIN = 0.001  # weight of depth regression
+cfg.TRAIN.LAMBDA_TARGET_DEPTH_MAIN = 0.001
+cfg.TRAIN.LAMBDA_SEG_FUSE_MAIN = 1.0
+
 # Domain adaptation
 cfg.TRAIN.DA_METHOD = "DADA"
 # Adversarial training params
@@ -103,6 +108,7 @@ cfg.TEST.INPUT_SIZE_TARGET = (1024, 512)
 cfg.TEST.OUTPUT_SIZE_TARGET = (2048, 1024)
 cfg.TEST.INFO_TARGET = str(project_root / "dada/dataset/cityscapes_list/info16class.json")
 cfg.TEST.WAIT_MODEL = True
+cfg.TEST.EVAL_MODE = 'seg'
 
 
 def cfg_from_file(filename):

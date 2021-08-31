@@ -21,11 +21,18 @@ from advent.dataset.cityscapes import CityscapesDataSet
 from advent.model.deeplabv2 import get_deeplab_v2
 from advent.domain_adaptation.train_UDA import train_domain_adaptation
 
+from dada.dataset.cityscapes import CityscapesD
 from dada.dataset.mapillary import MapillaryDataSet
 from dada.dataset.synthia import SYNTHIADataSetDepth
 from dada.model.deeplabv2_depth import get_deeplab_v2_depth
 from dada.domain_adaptation.config import cfg, cfg_from_file
 from dada.domain_adaptation.train_UDA import train_domain_adaptation_with_depth
+from dada.model.deeplabv2_depth_decoder import get_deeplab_v2_depth_decoder
+from dada.model.deeplabv2_depth_decoder_ff import get_deeplab_v2_depth_decoder_ff
+from dada.model.deeplabv2_depth_decoder_seperate_branch import get_deeplab_v2_depth_decoder_separate_branch
+from dada.model.deeplabv2_depth_est import get_deeplab_v2_depth_est
+from dada.model.deeplabv2_depth_t import get_deeplab_v2_t_depth
+from dada.model.deeplabv2_depth_t_no_fusion import get_deeplab_v2_t_depth_no_fusion
 
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore")
@@ -78,42 +85,22 @@ def main():
         return
 
     # LOAD SEGMENTATION NET
+
     assert osp.exists(
         cfg.TRAIN.RESTORE_FROM
     ), f"Missing init model {cfg.TRAIN.RESTORE_FROM}"
-    if cfg.TRAIN.MODEL == "DeepLabv2_depth":
-        model = get_deeplab_v2_depth(
-            num_classes=cfg.NUM_CLASSES,
-            multi_level=cfg.TRAIN.MULTI_LEVEL
-        )
-        saved_state_dict = torch.load(cfg.TRAIN.RESTORE_FROM)
-        if "DeepLab_resnet_pretrained_imagenet" in cfg.TRAIN.RESTORE_FROM:
-            new_params = model.state_dict().copy()
-            for i in saved_state_dict:
-                i_parts = i.split(".")
-                if not i_parts[1] == "layer5":
-                    new_params[".".join(i_parts[1:])] = saved_state_dict[i]
-            model.load_state_dict(new_params)
-        else:
-            model.load_state_dict(saved_state_dict)
-    elif cfg.TRAIN.MODEL == "DeepLabv2":
-        model = get_deeplab_v2(
-            num_classes=cfg.NUM_CLASSES,
-            multi_level=cfg.TRAIN.MULTI_LEVEL
-        )
-        saved_state_dict = torch.load(cfg.TRAIN.RESTORE_FROM)
-        if "DeepLab_resnet_pretrained_imagenet" in cfg.TRAIN.RESTORE_FROM:
-            new_params = model.state_dict().copy()
-            for i in saved_state_dict:
-                i_parts = i.split(".")
-                if not i_parts[1] == "layer5":
-                    new_params[".".join(i_parts[1:])] = saved_state_dict[i]
-            model.load_state_dict(new_params)
-        else:
-            model.load_state_dict(saved_state_dict)
+
+    model = get_model(cfg.TRAIN.MODEL)
+    saved_state_dict = torch.load(cfg.TRAIN.RESTORE_FROM)
+    if "DeepLab_resnet_pretrained_imagenet" in cfg.TRAIN.RESTORE_FROM:
+        new_params = model.state_dict().copy()
+        for i in saved_state_dict:
+            i_parts = i.split(".")
+            if not i_parts[1] == "layer5":
+                new_params[".".join(i_parts[1:])] = saved_state_dict[i]
+        model.load_state_dict(new_params)
     else:
-        raise NotImplementedError(f"Not yet supported {cfg.TRAIN.MODEL}")
-    print("Model loaded")
+        model.load_state_dict(saved_state_dict)
 
     # DATALOADERS
     source_dataset = SYNTHIADataSetDepth(
@@ -136,15 +123,27 @@ def main():
     )
 
     if cfg.TARGET == 'Cityscapes':
-        target_dataset = CityscapesDataSet(
-            root=cfg.DATA_DIRECTORY_TARGET,
-            list_path=cfg.DATA_LIST_TARGET,
-            set=cfg.TRAIN.SET_TARGET,
-            info_path=cfg.TRAIN.INFO_TARGET,
-            max_iters=cfg.TRAIN.MAX_ITERS * cfg.TRAIN.BATCH_SIZE_TARGET,
-            crop_size=cfg.TRAIN.INPUT_SIZE_TARGET,
-            mean=cfg.TRAIN.IMG_MEAN
-        )
+        if cfg.TARGET_DEPTH:
+            target_dataset = CityscapesD(
+                root=cfg.DATA_DIRECTORY_TARGET,
+                list_path=cfg.DATA_LIST_TARGET,
+                set=cfg.TRAIN.SET_TARGET,
+                info_path=cfg.TRAIN.INFO_TARGET,
+                max_iters=cfg.TRAIN.MAX_ITERS * cfg.TRAIN.BATCH_SIZE_TARGET,
+                crop_size=cfg.TRAIN.INPUT_SIZE_TARGET,
+                mean=cfg.TRAIN.IMG_MEAN
+            )
+        else:
+            target_dataset = CityscapesDataSet(
+                root=cfg.DATA_DIRECTORY_TARGET,
+                list_path=cfg.DATA_LIST_TARGET,
+                set=cfg.TRAIN.SET_TARGET,
+                info_path=cfg.TRAIN.INFO_TARGET,
+                max_iters=cfg.TRAIN.MAX_ITERS * cfg.TRAIN.BATCH_SIZE_TARGET,
+                crop_size=cfg.TRAIN.INPUT_SIZE_TARGET,
+                mean=cfg.TRAIN.IMG_MEAN
+            )
+
     elif cfg.TARGET == 'Mapillary':
         target_dataset = MapillaryDataSet(
             root=cfg.DATA_DIRECTORY_TARGET,
@@ -175,6 +174,49 @@ def main():
         train_domain_adaptation_with_depth(model, source_loader, target_loader, cfg)
     else:
         train_domain_adaptation(model, source_loader, target_loader, cfg)
+
+
+def get_model(model_name):
+    # LOAD SEGMENTATION NET
+    if model_name == "DeepLabv2_depth":
+        model = get_deeplab_v2_depth(
+            num_classes=cfg.NUM_CLASSES,
+            multi_level=cfg.TRAIN.MULTI_LEVEL
+        )
+    elif model_name == "DeepLabv2_depth_no_fusion":
+        model = get_deeplab_v2_t_depth_no_fusion(
+            num_classes=cfg.NUM_CLASSES,
+            multi_level=cfg.TRAIN.MULTI_LEVEL
+        )
+    elif model_name == "DeepLabv2_depth_decoder":
+        model = get_deeplab_v2_depth_decoder(
+            num_classes=cfg.NUM_CLASSES,
+            multi_level=cfg.TRAIN.MULTI_LEVEL
+        )
+    elif model_name == "get_deeplab_v2_depth_decoder_ff":
+        model = get_deeplab_v2_depth_decoder_ff(
+            num_classes=cfg.NUM_CLASSES,
+            multi_level=cfg.TRAIN.MULTI_LEVEL
+        )
+    elif model_name == "get_deeplab_v2_depth_decoder_separate_branch":
+        model = get_deeplab_v2_depth_decoder_separate_branch(
+            num_classes=cfg.NUM_CLASSES,
+            multi_level=cfg.TRAIN.MULTI_LEVEL
+        )
+    elif model_name == "get_deeplab_v2_depth_est":
+        model = get_deeplab_v2_depth_est(
+            num_classes=cfg.NUM_CLASSES,
+            multi_level=cfg.TRAIN.MULTI_LEVEL
+        )
+    elif model_name == "DeepLabv2":
+        model = get_deeplab_v2(
+            num_classes=cfg.NUM_CLASSES,
+            multi_level=cfg.TRAIN.MULTI_LEVEL
+        )
+    else:
+        raise NotImplementedError(f"Not yet supported {model_name}")
+    print("Model loaded")
+    return model
 
 
 if __name__ == "__main__":

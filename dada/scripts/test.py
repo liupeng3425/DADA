@@ -18,6 +18,10 @@ from advent.dataset.cityscapes import CityscapesDataSet
 from dada.dataset.mapillary import MapillaryDataSet
 from dada.domain_adaptation.config import cfg, cfg_from_file
 from dada.model.deeplabv2_depth import get_deeplab_v2_depth
+from dada.model.deeplabv2_depth_decoder import get_deeplab_v2_depth_decoder
+from dada.model.deeplabv2_depth_t import get_deeplab_v2_t_depth
+from dada.model.deeplabv2_depth_t_no_fusion import get_deeplab_v2_t_depth_no_fusion
+from dada.scripts.train import get_model
 
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore")
@@ -45,18 +49,7 @@ def main(config_file, exp_suffix):
     if cfg.TEST.MODE == "best":
         assert n_models == 1, "Not yet supported"
     for i in range(n_models):
-        if cfg.TEST.MODEL[i] == "DeepLabv2_depth":
-            model = get_deeplab_v2_depth(
-                num_classes=cfg.NUM_CLASSES,
-                multi_level=cfg.TEST.MULTI_LEVEL[i]
-            )
-        elif cfg.TEST.MODEL[i] == "DeepLabv2":
-            model = get_deeplab_v2(
-                num_classes=cfg.NUM_CLASSES,
-                multi_level=cfg.TEST.MULTI_LEVEL[i]
-            )
-        else:
-            raise NotImplementedError(f"Not yet supported {cfg.TEST.MODEL[i]}")
+        model = get_model(cfg.TEST.MODEL[i])
         models.append(model)
 
     if os.environ.get("DADA_DRY_RUN", "0") == "1":
